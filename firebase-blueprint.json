@@ -1,0 +1,105 @@
+{
+  "entities": {
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "General settings for the user's dashboard",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "goals": { "type": "array", "items": { "type": "string" } },
+        "lastDailyReset": { "type": "string" },
+        "lastMonthlyReset": { "type": "string" }
+      },
+      "required": ["title", "goals", "lastDailyReset", "lastMonthlyReset"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "An active task",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "priority": { "type": "string", "enum": ["High", "Med", "Low", "None"] },
+        "deadline": { "type": "string" },
+        "completedAt": { "type": "string" },
+        "section": { "type": "string", "enum": ["daily", "monthly", "projects", "other"] },
+        "order": { "type": "number" }
+      },
+      "required": ["id", "text", "completed", "section", "order"]
+    },
+    "CalendarEvent": {
+      "title": "CalendarEvent",
+      "description": "A scheduled event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "dayOfWeek": { "type": "number" },
+        "repeatWeekly": { "type": "boolean" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "text", "dayOfWeek", "repeatWeekly"]
+    },
+    "HistoryItem": {
+      "title": "HistoryItem",
+      "description": "A completed task history record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "completedAt": { "type": "string" },
+        "section": { "type": "string" },
+        "priority": { "type": "string", "enum": ["High", "Med", "Low", "None"] },
+        "savedForYearlyReview": { "type": "boolean" }
+      },
+      "required": ["id", "text", "completedAt", "section"]
+    },
+    "Archive": {
+      "title": "Archive",
+      "description": "A collection of archived history items (e.g. Yearly Review)",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "items": { "type": "array", "items": { "$ref": "#/entities/HistoryItem" } }
+      },
+      "required": ["title", "items"]
+    },
+    "EventException": {
+      "title": "EventException",
+      "description": "Exception for a repeating event on a specific date",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "exceptionKey": { "type": "string", "description": "Format: eventId:yyyy-MM-dd" }
+      },
+      "required": ["id", "exceptionKey"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserSettings",
+      "description": "User specific settings"
+    },
+    "/users/{userId}/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "User's active tasks"
+    },
+    "/users/{userId}/calendarEvents/{eventId}": {
+      "schema": "CalendarEvent",
+      "description": "User's calendar events"
+    },
+    "/users/{userId}/history/{historyId}": {
+      "schema": "HistoryItem",
+      "description": "User's task completion history"
+    },
+    "/users/{userId}/archives/{archiveId}": {
+      "schema": "Archive",
+      "description": "Archived history collections"
+    },
+    "/users/{userId}/eventExceptions/{exceptionId}": {
+      "schema": "EventException",
+      "description": "Exceptions for repeating events"
+    }
+  }
+}

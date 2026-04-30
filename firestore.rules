@@ -1,0 +1,111 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User Settings
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUserSettings(request.resource.data);
+      allow update: if isOwner(userId) && isValidUserSettings(request.resource.data);
+
+      function isValidUserSettings(data) {
+        return data.keys().hasAll(['title', 'goals', 'lastDailyReset', 'lastMonthlyReset'])
+          && data.keys().size() == 4
+          && data.title is string && data.title.size() <= 100
+          && data.goals is list && data.goals.size() <= 10
+          && data.lastDailyReset is string && data.lastDailyReset.matches('^\\d{4}-\\d{2}-\\d{2}$')
+          && data.lastMonthlyReset is string && data.lastMonthlyReset.matches('^\\d{4}-\\d{2}-\\d{2}$');
+      }
+
+      // Subcollections
+      match /tasks/{taskId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidTask(request.resource.data);
+        allow update: if isOwner(userId) && isValidTask(request.resource.data);
+        allow delete: if isOwner(userId);
+
+        function isValidTask(data) {
+          return data.keys().hasAll(['id', 'text', 'completed', 'section', 'order'])
+            && data.id is string
+            && data.text is string && data.text.size() <= 500
+            && data.completed is bool
+            && data.section in ['daily', 'monthly', 'projects', 'other']
+            && data.order is number;
+        }
+      }
+
+      match /calendarEvents/{eventId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidCalendarEvent(request.resource.data);
+        allow update: if isOwner(userId) && isValidCalendarEvent(request.resource.data);
+        allow delete: if isOwner(userId);
+
+        function isValidCalendarEvent(data) {
+          return data.keys().hasAll(['id', 'text', 'dayOfWeek', 'repeatWeekly'])
+            && data.id is string
+            && data.text is string && data.text.size() <= 200
+            && data.dayOfWeek is int && data.dayOfWeek >= 0 && data.dayOfWeek <= 6
+            && data.repeatWeekly is bool;
+        }
+      }
+
+      match /history/{historyId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidHistoryItem(request.resource.data);
+        allow update: if isOwner(userId) && isValidHistoryItem(request.resource.data);
+        allow delete: if isOwner(userId);
+
+        function isValidHistoryItem(data) {
+          return data.keys().hasAll(['id', 'text', 'completedAt', 'section'])
+            && data.id is string
+            && data.text is string && data.text.size() <= 500
+            && data.completedAt is string
+            && data.section is string;
+        }
+      }
+
+      match /archives/{archiveId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidArchive(request.resource.data);
+        allow update: if isOwner(userId) && isValidArchive(request.resource.data);
+        allow delete: if isOwner(userId);
+
+        function isValidArchive(data) {
+          return data.keys().hasAll(['title', 'items'])
+            && data.title is string && data.title.size() <= 200
+            && data.items is list;
+        }
+      }
+
+      match /eventExceptions/{exceptionId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidEventException(request.resource.data);
+        allow update: if isOwner(userId) && isValidEventException(request.resource.data);
+        allow delete: if isOwner(userId);
+
+        function isValidEventException(data) {
+          return data.keys().hasAll(['id', 'exceptionKey'])
+            && data.id is string
+            && data.exceptionKey is string;
+        }
+      }
+    }
+  }
+}
