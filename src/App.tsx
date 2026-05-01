@@ -24,7 +24,7 @@ import {
   getDocFromServer,
   deleteField
 } from 'firebase/firestore';
-import firebaseConfig from './firebase-applet-config.json';
+import firebaseConfig from '../firebase-applet-config.json';
 
 // ... existing imports ...
 import { 
@@ -75,6 +75,8 @@ interface Task {
   deadline?: string;
   repeatMonthly?: boolean;
   monthlyRepeatType?: 'day' | 'nthWeekday';
+  monthlyRepeatNth?: number | 'last';
+  monthlyRepeatWeekday?: number;
   completedAt?: string;
   section: 'daily' | 'monthly' | 'projects' | 'other';
   order: number;
@@ -405,6 +407,8 @@ export default function App() {
   const [tempDeadlineTime, setTempDeadlineTime] = useState('');
   const [tempRepeatMonthly, setTempRepeatMonthly] = useState(false);
   const [tempMonthlyRepeatType, setTempMonthlyRepeatType] = useState<'day' | 'nthWeekday'>('day');
+  const [tempMonthlyRepeatNth, setTempMonthlyRepeatNth] = useState<number | 'last'>(1);
+  const [tempMonthlyRepeatWeekday, setTempMonthlyRepeatWeekday] = useState<number>(1);
 
   // Persistence
   useEffect(() => {
@@ -703,7 +707,9 @@ export default function App() {
     await setDoc(taskRef, { 
       deadline: date,
       repeatMonthly: tempRepeatMonthly,
-      monthlyRepeatType: tempRepeatMonthly ? tempMonthlyRepeatType : null
+      monthlyRepeatType: tempRepeatMonthly ? tempMonthlyRepeatType : null,
+      monthlyRepeatNth: tempRepeatMonthly && tempMonthlyRepeatType === 'nthWeekday' ? tempMonthlyRepeatNth : null,
+      monthlyRepeatWeekday: tempRepeatMonthly && tempMonthlyRepeatType === 'nthWeekday' ? tempMonthlyRepeatWeekday : null
     }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/tasks/${taskForDeadline.id}`));
     setIsDeadlineModalOpen(false);
     setTaskForDeadline(null);
@@ -711,6 +717,8 @@ export default function App() {
     setTempDeadlineTime('');
     setTempRepeatMonthly(false);
     setTempMonthlyRepeatType('day');
+    setTempMonthlyRepeatNth(1);
+    setTempMonthlyRepeatWeekday(1);
   };
 
   const handleClearDeadline = async () => {
@@ -719,7 +727,9 @@ export default function App() {
     await setDoc(taskRef, { 
       deadline: null,
       repeatMonthly: false,
-      monthlyRepeatType: null
+      monthlyRepeatType: null,
+      monthlyRepeatNth: null,
+      monthlyRepeatWeekday: null
     }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/tasks/${taskForDeadline.id}`));
     setIsDeadlineModalOpen(false);
     setTaskForDeadline(null);
@@ -727,6 +737,8 @@ export default function App() {
     setTempDeadlineTime('');
     setTempRepeatMonthly(false);
     setTempMonthlyRepeatType('day');
+    setTempMonthlyRepeatNth(1);
+    setTempMonthlyRepeatWeekday(1);
   };
 
   const openDeadlineModal = (task: Task) => {
@@ -744,7 +756,10 @@ export default function App() {
       setTempDeadlineDate(format(new Date(), 'yyyy-MM-dd'));
       setTempDeadlineTime('');
     }
-    setTempRepeatMonthly(task.repeatMonthly || (task.section === 'monthly'));
+    const d = task.deadline ? new Date(task.deadline.includes('T') ? task.deadline : task.deadline.replace(/-/g, '/')) : new Date();
+    setTempRepeatMonthly(!!task.repeatMonthly || task.section === 'monthly');
+    setTempMonthlyRepeatNth(task.monthlyRepeatNth || Math.ceil(d.getDate() / 7));
+    setTempMonthlyRepeatWeekday(task.monthlyRepeatWeekday !== undefined ? task.monthlyRepeatWeekday : d.getDay());
     setTempMonthlyRepeatType(task.monthlyRepeatType || 'day');
     setIsDeadlineModalOpen(true);
   };
@@ -2129,34 +2144,82 @@ export default function App() {
                           </div>
                         </label>
 
-                        {tempRepeatMonthly && tempDeadlineDate && (
-                          <div className="flex gap-2 p-1 bg-slate-100 rounded-lg">
-                            <button
-                              onClick={() => setTempMonthlyRepeatType('day')}
-                              className={`flex-1 px-3 py-2 text-xs font-bold rounded-md transition-all ${
-                                tempMonthlyRepeatType === 'day' 
-                                  ? 'bg-white text-slate-900 shadow-sm' 
-                                  : 'text-slate-500 hover:text-slate-700'
-                              }`}
-                            >
-                              Every {format(new Date(tempDeadlineDate.replace(/-/g, '/')), 'do')}
-                            </button>
-                            <button
-                              onClick={() => setTempMonthlyRepeatType('nthWeekday')}
-                              className={`flex-1 px-3 py-2 text-xs font-bold rounded-md transition-all ${
-                                tempMonthlyRepeatType === 'nthWeekday' 
-                                  ? 'bg-white text-slate-900 shadow-sm' 
-                                  : 'text-slate-500 hover:text-slate-700'
-                              }`}
-                            >
-                              {(() => {
-                                const d = new Date(tempDeadlineDate.replace(/-/g, '/'));
-                                const n = Math.ceil(d.getDate() / 7);
-                                const dayName = format(d, 'EEEE');
-                                const ordinal = n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : n === 4 ? '4th' : '5th';
-                                return `${ordinal} ${dayName}`;
-                              })()}
-                            </button>
+                        {tempRepeatMonthly && (
+                          <div className="space-y-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                            <div className="flex gap-2 p-1 bg-slate-200/50 rounded-lg">
+                              <button
+                                onClick={() => setTempMonthlyRepeatType('day')}
+                                className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                  tempMonthlyRepeatType === 'day' 
+                                    ? 'bg-white text-slate-900 shadow-sm' 
+                                    : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                              >
+                                Specific Day
+                              </button>
+                              <button
+                                onClick={() => setTempMonthlyRepeatType('nthWeekday')}
+                                className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                  tempMonthlyRepeatType === 'nthWeekday' 
+                                    ? 'bg-white text-slate-900 shadow-sm' 
+                                    : 'text-slate-500 hover:text-slate-700'
+                                }`}
+                              >
+                                Flexible Day
+                              </button>
+                            </div>
+
+                            {tempMonthlyRepeatType === 'day' ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">On day of month</span>
+                                <input 
+                                  type="number" 
+                                  min="1" 
+                                  max="31"
+                                  value={tempDeadlineDate ? new Date(tempDeadlineDate.replace(/-/g, '/')).getDate() : 1}
+                                  onChange={(e) => {
+                                    const d = tempDeadlineDate ? new Date(tempDeadlineDate.replace(/-/g, '/')) : new Date();
+                                    d.setDate(parseInt(e.target.value) || 1);
+                                    setTempDeadlineDate(format(d, 'yyyy-MM-dd'));
+                                  }}
+                                  className="clean-input text-sm font-bold w-full"
+                                />
+                                <span className="text-[10px] text-slate-400 font-medium ml-1">Every {tempDeadlineDate ? format(new Date(tempDeadlineDate.replace(/-/g, '/')), 'do') : 'month'}</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">Occurrence</span>
+                                    <select 
+                                      className="clean-input text-sm font-bold appearance-none bg-white py-2"
+                                      value={tempMonthlyRepeatNth}
+                                      onChange={(e) => setTempMonthlyRepeatNth(e.target.value === 'last' ? 'last' : parseInt(e.target.value))}
+                                    >
+                                      {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : '4th'}</option>)}
+                                      <option value="last">Last</option>
+                                    </select>
+                                  </div>
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">Weekday</span>
+                                    <select 
+                                      className="clean-input text-sm font-bold appearance-none bg-white py-2"
+                                      value={tempMonthlyRepeatWeekday}
+                                      onChange={(e) => setTempMonthlyRepeatWeekday(parseInt(e.target.value))}
+                                    >
+                                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
+                                        <option key={i} value={i}>{d}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </div>
+                                <div className="text-center p-2 border-t border-slate-100">
+                                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                                    Repeats every {tempMonthlyRepeatNth === 'last' ? 'Last' : tempMonthlyRepeatNth === 1 ? '1st' : tempMonthlyRepeatNth === 2 ? '2nd' : tempMonthlyRepeatNth === 3 ? '3rd' : '4th'} {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][tempMonthlyRepeatWeekday]}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -2703,11 +2766,11 @@ function ModernTaskListView({
                        const d = new Date(dateStr);
                        const timeStr = task.deadline.includes('T') ? ' | ' + format(d, 'h:mm a') : '';
                        
-                       if (task.monthlyRepeatType === 'nthWeekday') {
-                         const n = Math.ceil(d.getDate() / 7);
-                         const dayName = format(d, 'EEE');
-                         const ordinal = n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : n === 4 ? '4th' : '5th';
-                         return `OFF THE ${ordinal} ${dayName}${timeStr}`;
+                       if (task.monthlyRepeatType === 'nthWeekday' && task.monthlyRepeatNth !== undefined && task.monthlyRepeatWeekday !== undefined) {
+                         const n = task.monthlyRepeatNth;
+                         const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][task.monthlyRepeatWeekday];
+                         const ordinal = n === 'last' ? 'Last' : n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : n === 4 ? '4th' : '5th';
+                         return `EVERY ${ordinal} ${dayName}${timeStr}`;
                        }
                        
                        const dayNum = format(d, 'do');
