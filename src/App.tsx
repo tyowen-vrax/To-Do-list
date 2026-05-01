@@ -67,6 +67,12 @@ import {
 
 type Priority = 'High' | 'Med' | 'Low' | 'None';
 
+interface SubTask {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 interface Task {
   id: string;
   text: string;
@@ -80,6 +86,7 @@ interface Task {
   completedAt?: string;
   section: 'daily' | 'monthly' | 'projects' | 'other';
   order: number;
+  subtasks?: SubTask[];
 }
 
 interface CalendarEvent {
@@ -555,6 +562,13 @@ export default function App() {
     batch.set(taskRef, newTask);
 
     await batch.commit().catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/tasks_restore`));
+  };
+
+  const handleUpdateSubTasks = async (taskId: string, subtasks: SubTask[]) => {
+    if (user) {
+      const taskRef = doc(db, `users/${user.uid}/tasks`, taskId);
+      await setDoc(taskRef, { subtasks }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/tasks/${taskId}`));
+    }
   };
 
   const handleUpdateHistoryTask = async (taskId: string, newText: string) => {
@@ -1492,6 +1506,7 @@ export default function App() {
               onReorder={(newOrder) => handleReorderTasks(newOrder, 'daily')}
               onSetPriority={setPriority}
               onSetDeadline={openDeadlineModal}
+              onUpdateSubTasks={handleUpdateSubTasks}
               editingTaskId={editingTaskId}
               setEditingTaskId={setEditingTaskId}
               compact
@@ -1543,6 +1558,7 @@ export default function App() {
               onReorder={(newOrder) => handleReorderTasks(newOrder, 'projects')}
               onSetPriority={setPriority}
               onSetDeadline={openDeadlineModal}
+              onUpdateSubTasks={handleUpdateSubTasks}
               editingTaskId={editingTaskId}
               setEditingTaskId={setEditingTaskId}
               compact
@@ -1597,6 +1613,7 @@ export default function App() {
                 onReorder={(newOrder) => handleReorderTasks(newOrder, 'other')}
                 onSetPriority={setPriority}
                 onSetDeadline={openDeadlineModal}
+                onUpdateSubTasks={handleUpdateSubTasks}
                 editingTaskId={editingTaskId}
                 setEditingTaskId={setEditingTaskId}
                 compact
@@ -1649,6 +1666,7 @@ export default function App() {
                 onReorder={(newOrder) => handleReorderTasks(newOrder, 'monthly')}
                 onSetPriority={setPriority}
                 onSetDeadline={openDeadlineModal}
+                onUpdateSubTasks={handleUpdateSubTasks}
                 editingTaskId={editingTaskId}
                 setEditingTaskId={setEditingTaskId}
                 compact
@@ -2648,6 +2666,7 @@ function ModernTaskListView({
   onReorder,
   onSetPriority,
   onSetDeadline,
+  onUpdateSubTasks,
   editingTaskId, 
   setEditingTaskId,
   compact = false,
@@ -2660,11 +2679,62 @@ function ModernTaskListView({
   onReorder?: (newOrder: Task[]) => void,
   onSetPriority: (id: string, p: Priority) => void,
   onSetDeadline: (task: Task) => void,
+  onUpdateSubTasks?: (id: string, subtasks: SubTask[]) => void,
   editingTaskId: string | null,
   setEditingTaskId: (id: string | null) => void,
   hidePriority?: boolean;
   compact?: boolean;
 }) {
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
+  const [newSubTaskText, setNewSubTaskText] = useState<{ [taskId: string]: string }>({});
+
+  const toggleExpand = (taskId: string) => {
+    setExpandedTaskIds(prev => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  };
+
+  const handleAddSubTask = (taskId: string) => {
+    const text = newSubTaskText[taskId];
+    if (!text?.trim() || !onUpdateSubTasks) return;
+
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const subtasks = [...(task.subtasks || [])];
+    subtasks.push({
+      id: Math.random().toString(36).substr(2, 9),
+      text: text.trim(),
+      completed: false
+    });
+
+    onUpdateSubTasks(taskId, subtasks);
+    setNewSubTaskText(prev => ({ ...prev, [taskId]: '' }));
+  };
+
+  const handleToggleSubTask = (taskId: string, subTaskId: string) => {
+    if (!onUpdateSubTasks) return;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || !task.subtasks) return;
+
+    const subtasks = task.subtasks.map(st => 
+      st.id === subTaskId ? { ...st, completed: !st.completed } : st
+    );
+
+    onUpdateSubTasks(taskId, subtasks);
+  };
+
+  const handleDeleteSubTask = (taskId: string, subTaskId: string) => {
+    if (!onUpdateSubTasks) return;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || !task.subtasks) return;
+
+    const subtasks = task.subtasks.filter(st => st.id !== subTaskId);
+    onUpdateSubTasks(taskId, subtasks);
+  };
   return (
     <Reorder.Group 
       axis="y" 
@@ -2722,10 +2792,69 @@ function ModernTaskListView({
                   >
                     <Trash2 size={compact ? 10 : 12} />
                   </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
+                    className={`p-0.5 hover:text-slate-900 transition-colors bg-slate-100 hover:bg-slate-200 rounded ${task.subtasks?.length ? 'text-slate-900' : 'text-slate-400'}`}
+                    title={expandedTaskIds.has(task.id) ? "Collapse checklist" : "Expand checklist"}
+                  >
+                    {expandedTaskIds.has(task.id) ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
                 </div>
               </div>
             )}
           </div>
+          <AnimatePresence>
+            {expandedTaskIds.has(task.id) && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden bg-slate-50/50 rounded-md mt-1 ml-6 border-l-2 border-slate-200"
+              >
+                <div className="p-2 space-y-1.5">
+                  {(task.subtasks || []).map(st => (
+                    <div key={st.id} className="flex items-center gap-2 group/st">
+                      <input 
+                        type="checkbox" 
+                        checked={st.completed}
+                        onChange={() => handleToggleSubTask(task.id, st.id)}
+                        className="w-3 h-3 rounded accent-slate-900 flex-shrink-0 cursor-pointer"
+                      />
+                      <span className={`text-[10px] flex-1 truncate ${st.completed ? 'opacity-30 line-through font-bold' : 'text-slate-600 font-bold'}`}>
+                        {st.text}
+                      </span>
+                      <button 
+                        onClick={() => handleDeleteSubTask(task.id, st.id)}
+                        className="opacity-0 group-hover/st:opacity-100 p-0.5 hover:text-red-500 transition-opacity"
+                      >
+                        <Trash2 size={8} />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-1.5 mt-1 border-t border-slate-100 pt-1.5">
+                    <input 
+                      className="flex-1 bg-white border border-slate-200 rounded px-1.5 py-0.5 text-[10px] outline-none font-bold placeholder:text-slate-300 shadow-sm"
+                      placeholder="Add sub-task..."
+                      value={newSubTaskText[task.id] || ''}
+                      onChange={e => setNewSubTaskText(prev => ({ ...prev, [task.id]: e.target.value }))}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.stopPropagation();
+                          handleAddSubTask(task.id);
+                        }
+                      }}
+                    />
+                    <button 
+                      onClick={() => handleAddSubTask(task.id)}
+                      className="p-1 bg-slate-900 text-white rounded hover:bg-slate-800 transition-colors"
+                    >
+                      <Plus size={8} />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
           {task.deadline && (task.section !== 'daily' || task.deadline.includes('T')) && (
             <div 
               className={`flex items-center gap-1 ml-6 mt-0.5 cursor-pointer w-fit px-1.5 py-0.5 rounded border transition-colors ${(() => {
