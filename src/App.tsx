@@ -2567,12 +2567,21 @@ const HistoryItemView: React.FC<{
     <div className="flex items-start gap-1.5 flex-1 min-w-0">
       <div className="w-1 h-1 bg-slate-200 rounded-full mt-1.5 flex-shrink-0 group-hover:bg-slate-400 transition-colors" />
       {editingTaskId === item.id ? (
-        <div className="flex flex-col gap-1 flex-1">
+        <div 
+          className="flex flex-col gap-1 flex-1 history-edit-block"
+          onBlur={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+              const textInput = e.currentTarget.querySelector('input') as HTMLInputElement;
+              if (textInput) {
+                onUpdate(item.id, textInput.value);
+              }
+            }
+          }}
+        >
           <input
             autoFocus
             className="flex-1 bg-white border border-slate-200 outline-none text-[11px] font-bold py-0.5 px-1 rounded"
             defaultValue={item.text}
-            onBlur={(e) => onUpdate(item.id, e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onUpdate(item.id, e.currentTarget.value)}
           />
           <input 
