@@ -212,7 +212,7 @@ const INITIAL_STATE: DashboardState = {
 // --- Firebase Initialization ---
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+const db = getFirestore(app, "ai-studio-375da860-fb89-4b2f-945b-bc123c69517c");
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
