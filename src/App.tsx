@@ -24,7 +24,14 @@ import {
   getDocFromServer,
   deleteField
 } from 'firebase/firestore';
-import firebaseConfig from './firebase-applet-config.json';
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "gen-lang-client-0436054198.firebaseapp.com",
+  projectId: "gen-lang-client-0436054198",
+  storageBucket: "gen-lang-client-0436054198.firebasestorage.app",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
 
 // ... existing imports ...
 import { 
