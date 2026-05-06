@@ -25,12 +25,12 @@ import {
   deleteField
 } from 'firebase/firestore';
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
+  apiKey: "AIzaSyBYaDbK8euiu1dJU1qZOAD8LiiO5ZF3his",
   authDomain: "gen-lang-client-0436054198.firebaseapp.com",
   projectId: "gen-lang-client-0436054198",
   storageBucket: "gen-lang-client-0436054198.firebasestorage.app",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  messagingSenderId: "925810231081",
+  appId: "1:925810231081:web:812973d0fe26d19478d938"
 };
 
 // ... existing imports ...
