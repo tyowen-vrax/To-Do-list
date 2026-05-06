@@ -24,7 +24,7 @@ import {
   getDocFromServer,
   deleteField
 } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import firebaseConfig from './firebase-applet-config.json';
 
 // ... existing imports ...
 import { 
