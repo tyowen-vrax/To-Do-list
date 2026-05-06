@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import copy from 'copy-to-clipboard';
@@ -24,7 +24,7 @@ import {
   getDocFromServer,
   deleteField
 } from 'firebase/firestore';
-import firebaseConfig from './firebase-applet-config.json';
+import firebaseConfig from '../firebase-applet-config.json';
 
 // ... existing imports ...
 import { 
@@ -44,7 +44,10 @@ import {
   Download,
   Copy,
   ExternalLink,
-  RotateCcw
+  RotateCcw,
+  Bold,
+  Underline,
+  List
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder } from 'motion/react';
 import { 
@@ -171,13 +174,13 @@ const PriorityBadge = ({ priority }: { priority?: Priority }) => {
 
 const PrioritySelect = ({ task, onSetPriority }: { task: Task, onSetPriority: (id: string, p: Priority) => void }) => (
   <select 
-    className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded border uppercase tracking-tighter cursor-pointer outline-none transition-colors ${
+    className={`text-[8px] h-5 font-extrabold px-1 rounded border uppercase tracking-tighter cursor-pointer outline-none transition-colors leading-none ${
       task.priority === 'High' ? 'bg-red-50 text-red-600 border-red-200' :
       task.priority === 'Med' ? 'bg-amber-50 text-amber-600 border-amber-200' :
       task.priority === 'Low' ? 'bg-blue-50 text-blue-600 border-blue-200' :
       'bg-slate-50 text-slate-300 border-slate-100'
     }`}
-    value={task.priority}
+    value={task.priority || 'None'}
     onChange={(e) => onSetPriority(task.id, e.target.value as Priority)}
   >
     <option value="None">None</option>
@@ -323,6 +326,7 @@ export default function App() {
           lastDailyReset: data.lastDailyReset,
           lastMonthlyReset: data.lastMonthlyReset,
         }));
+        if (data.notes !== undefined) setNotes(data.notes);
       } else {
         // Initial setup for new user
         setDoc(userDocRef, {
@@ -375,6 +379,24 @@ export default function App() {
   }, [user]);
 
   const [currentWeekStart, setCurrentWeekStart] = useState(() => startOfWeek(new Date()));
+  const [notes, setNotes] = useState('');
+  const [isNotesOpen, setIsNotesOpen] = useState(true);
+  const [isBoldActive, setIsBoldActive] = useState(false);
+  const [isUnderlineActive, setIsUnderlineActive] = useState(false);
+  const [isListActive, setIsListActive] = useState(false);
+  const notesRef = useRef<HTMLDivElement>(null);
+
+  const checkNoteCommandStates = () => {
+    setIsBoldActive(document.queryCommandState('bold'));
+    setIsUnderlineActive(document.queryCommandState('underline'));
+    setIsListActive(document.queryCommandState('insertUnorderedList'));
+  };
+
+  useEffect(() => {
+    if (notesRef.current && notesRef.current.innerHTML !== notes) {
+      notesRef.current.innerHTML = notes;
+    }
+  }, [notes, isNotesOpen]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(true);
   const [isYearlyReviewOpen, setIsYearlyReviewOpen] = useState(false);
   const [historySnapshot, setHistorySnapshot] = useState<HistoryItem[] | null>(null);
@@ -461,6 +483,25 @@ export default function App() {
   }, [user, state.lastDailyReset, state.lastMonthlyReset]);
 
   // --- Handlers ---
+
+  const handleUpdateNotes = async (content: string) => {
+    setNotes(content);
+    if (user) {
+      const userDocRef = doc(db, 'users', user.uid);
+      await setDoc(userDocRef, { notes: content }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`));
+    }
+  };
+
+  const execNoteCommand = (command: string, value: string | undefined = undefined) => {
+    if (notesRef.current) {
+      notesRef.current.focus();
+    }
+    document.execCommand(command, false, value);
+    checkNoteCommandStates();
+    if (notesRef.current) {
+      handleUpdateNotes(notesRef.current.innerHTML);
+    }
+  };
 
   const handleUpdateTitle = async (text: string) => {
     if (user) {
@@ -821,6 +862,14 @@ export default function App() {
     if (user) {
       const eventRef = doc(db, `users/${user.uid}/calendarEvents`, eventId);
       await setDoc(eventRef, { text: finalTitle }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/calendarEvents/${eventId}`));
+    }
+    setEditingEventId(null);
+  };
+
+  const handleUpdateEventTime = async (eventId: string, time: string) => {
+    if (user) {
+      const eventRef = doc(db, `users/${user.uid}/calendarEvents`, eventId);
+      await setDoc(eventRef, { time }, { merge: true }).catch(err => handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}/calendarEvents/${eventId}`));
     }
     setEditingEventId(null);
   };
@@ -1411,13 +1460,28 @@ export default function App() {
                       }`}
                     >
                       {editingEventId === event.id ? (
-                        <input
-                          autoFocus
-                          className="flex-1 bg-transparent border-b border-slate-200 outline-none font-semibold text-slate-700"
-                          defaultValue={event.text}
-                          onBlur={(e) => handleUpdateEventText(event.id, e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleUpdateEventText(event.id, e.currentTarget.value)}
-                        />
+                        <div className="flex flex-col gap-1 p-1 bg-white rounded shadow-sm">
+                          <input
+                            autoFocus
+                            className="w-full bg-transparent border-b border-slate-200 outline-none font-semibold text-slate-700 text-[10px]"
+                            defaultValue={event.text}
+                            onBlur={(e) => {
+                              if (e.relatedTarget && (e.relatedTarget as HTMLElement).tagName === 'INPUT') return;
+                              handleUpdateEventText(event.id, e.target.value);
+                            }}
+                            onKeyDown={(e) => e.key === 'Enter' && handleUpdateEventText(event.id, e.currentTarget.value)}
+                          />
+                          <input
+                            type="time"
+                            className="w-full bg-transparent outline-none text-[8px] font-black text-slate-400 uppercase"
+                            defaultValue={event.time || ''}
+                            onBlur={(e) => {
+                              if (e.relatedTarget && (e.relatedTarget as HTMLElement).tagName === 'INPUT') return;
+                              handleUpdateEventTime(event.id, e.target.value);
+                            }}
+                            onKeyDown={(e) => e.key === 'Enter' && handleUpdateEventTime(event.id, e.currentTarget.value)}
+                          />
+                        </div>
                       ) : (
                         <>
                           <div className="flex justify-between items-start leading-tight">
@@ -1436,17 +1500,26 @@ export default function App() {
                               </button>
                             </div>
                           </div>
-                          {event.time && (
-                            <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter leading-none pb-0.5">
-                              {(() => {
-                                try {
-                                  return format(new Date(`2000-01-01T${event.time}`), 'h:mm a');
-                                } catch {
-                                  return event.time;
-                                }
-                              })()}
-                            </span>
-                          )}
+                          <div 
+                            className="cursor-pointer"
+                            onClick={() => setEditingEventId(event.id)}
+                          >
+                            {event.time ? (
+                              <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter leading-none pb-0.5">
+                                {(() => {
+                                  try {
+                                    return format(new Date(`2000-01-01T${event.time}`), 'h:mm a');
+                                  } catch {
+                                    return event.time;
+                                  }
+                                })()}
+                              </span>
+                            ) : (
+                               <span className="text-[8px] font-black text-slate-300 uppercase tracking-tighter leading-none pb-0.5 italic">
+                                 No Time
+                               </span>
+                            )}
+                          </div>
                         </>
                       )}
                     </div>
@@ -1463,9 +1536,9 @@ export default function App() {
         </div>
       </section>
 
-      {/* --- Main Grid (4-5-3) --- */}
-      <main className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
-        {/* Daily Checklist (4 cols) */}
+      {/* --- Main Grid (Balanced 4-5-4 on 13 cols) --- */}
+      <main className="grid grid-cols-1 md:grid-cols-13 gap-6 items-stretch">
+        {/* Daily Checklist (4 cols / ~31%) */}
         <section className="md:col-span-4 bento-card flex flex-col">
           <div className="p-5 border-b border-slate-100">
             <div className="flex items-center justify-between">
@@ -1517,7 +1590,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* Projects (5 cols) */}
+        {/* Projects (5 cols / ~38%) */}
         <section className="md:col-span-5 bento-card flex flex-col">
           <div className="p-5 border-b border-slate-100">
             <div className="flex items-center justify-between">
@@ -1571,8 +1644,8 @@ export default function App() {
           </div>
         </section>
 
-        {/* Other & Monthly (3 cols) */}
-        <div className="md:col-span-3 flex flex-col gap-6">
+        {/* Other & Monthly (4 cols / ~31%) Stacked */}
+        <div className="md:col-span-4 flex flex-col gap-6">
           <section className="flex-1 bento-card flex flex-col">
             <div className="p-5 border-b border-slate-100">
               <div className="flex items-center justify-between">
@@ -1625,7 +1698,7 @@ export default function App() {
             <div className="p-3 bg-slate-50/50 rounded-b-[1.25rem] border-t border-slate-100">
             </div>
           </section>
- 
+
           <section className="flex-1 bento-card flex flex-col relative">
             <div className="p-5 border-b border-slate-100">
               <div className="flex items-center justify-between">
@@ -1680,7 +1753,77 @@ export default function App() {
       </main>
 
       {/* --- Footer Sections --- */}
-      <footer className="space-y-4">
+      <footer className="space-y-6 mt-6">
+        {/* --- Notes Section --- */}
+        <section className="bento-card p-6 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setIsNotesOpen(!isNotesOpen)}>
+              <span className={`text-slate-400 transition-transform ${isNotesOpen ? 'rotate-0' : '-rotate-90'}`}>▼</span>
+              <h3 className="font-bold text-lg uppercase tracking-tight group-hover:text-slate-600 transition-colors">Notes</h3>
+            </div>
+          </div>
+          
+          <AnimatePresence>
+            {isNotesOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-50">
+                  <button 
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      execNoteCommand('bold');
+                    }}
+                    className={`p-1.5 rounded-md transition-colors ${isBoldActive ? 'bg-slate-200 text-slate-900 shadow-inner' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}
+                    title="Bold"
+                  >
+                    <Bold size={16} />
+                  </button>
+                  <button 
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      execNoteCommand('underline');
+                    }}
+                    className={`p-1.5 rounded-md transition-colors ${isUnderlineActive ? 'bg-slate-200 text-slate-900 shadow-inner' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}
+                    title="Underline"
+                  >
+                    <Underline size={16} />
+                  </button>
+                  <button 
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      execNoteCommand('insertUnorderedList');
+                    }}
+                    className={`p-1.5 rounded-md transition-colors ${isListActive ? 'bg-slate-200 text-slate-900 shadow-inner' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'}`}
+                    title="Bullet point"
+                  >
+                    <List size={16} />
+                  </button>
+                </div>
+                <div 
+                  ref={notesRef}
+                  contentEditable
+                  onInput={(e) => handleUpdateNotes(e.currentTarget.innerHTML)}
+                  onBlur={(e) => handleUpdateNotes(e.currentTarget.innerHTML)}
+                  onSelect={checkNoteCommandStates}
+                  onKeyUp={checkNoteCommandStates}
+                  onMouseUp={checkNoteCommandStates}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const text = e.clipboardData.getData('text/plain');
+                    document.execCommand('insertText', false, text);
+                  }}
+                  data-placeholder="Type any miscellaneous notes here..."
+                  className="w-full min-h-[150px] p-4 bg-slate-50/50 border border-slate-100 rounded-xl outline-none text-xs font-medium text-slate-700 leading-relaxed focus:bg-white focus:border-slate-200 transition-all overflow-y-auto notes-editor"
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+
         {/* --- Completed Section --- */}
         <section className="bento-card p-6 flex flex-col">
           <div className="flex items-center justify-between mb-4">
@@ -2211,7 +2354,7 @@ export default function App() {
                                     <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">Occurrence</span>
                                     <select 
                                       className="clean-input text-sm font-bold appearance-none bg-white py-2"
-                                      value={tempMonthlyRepeatNth}
+                                      value={tempMonthlyRepeatNth || 1}
                                       onChange={(e) => setTempMonthlyRepeatNth(e.target.value === 'last' ? 'last' : parseInt(e.target.value))}
                                     >
                                       {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : '4th'}</option>)}
@@ -2222,7 +2365,7 @@ export default function App() {
                                     <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">Weekday</span>
                                     <select 
                                       className="clean-input text-sm font-bold appearance-none bg-white py-2"
-                                      value={tempMonthlyRepeatWeekday}
+                                      value={tempMonthlyRepeatWeekday ?? 0}
                                       onChange={(e) => setTempMonthlyRepeatWeekday(parseInt(e.target.value))}
                                     >
                                       {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
@@ -2515,7 +2658,7 @@ export default function App() {
                     <label className="text-xs font-bold text-slate-400 uppercase">Day</label>
                     <select 
                       className="w-full clean-input text-lg"
-                      value={newEvent.dayIndex}
+                      value={newEvent.dayIndex ?? 0}
                       onChange={e => setNewEvent(prev => ({ ...prev, dayIndex: parseInt(e.target.value) }))}
                     >
                       {[0,1,2,3,4,5,6].map(i => (
@@ -2773,31 +2916,31 @@ function ModernTaskListView({
                 >
                   {task.text}
                 </span>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center justify-end flex-shrink-0 gap-1 ml-2">
+                  <div className="flex items-center gap-1 overflow-hidden max-w-0 opacity-0 group-hover:max-w-[70px] group-hover:opacity-100 transition-all duration-300 ease-out">
+                    <button 
+                      onClick={() => onSetDeadline(task)}
+                      className="h-5 flex items-center justify-center hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded text-[8px] px-1 font-extrabold whitespace-nowrap"
+                      title="Set deadline"
+                    >
+                      {task.section === 'projects' || task.section === 'other' ? 'DUE' : 'TIME'}
+                    </button>
+                    <button 
+                      onClick={() => onDelete(task.id)}
+                      className="h-5 w-5 flex items-center justify-center hover:text-red-500 hover:bg-red-50 rounded transition-colors bg-slate-50"
+                    >
+                      <Trash2 size={10} />
+                    </button>
+                  </div>
                   {!hidePriority && (
-                    <div className="scale-[0.7] origin-right">
-                      <PrioritySelect task={task} onSetPriority={onSetPriority} />
-                    </div>
+                    <PrioritySelect task={task} onSetPriority={onSetPriority} />
                   )}
                   <button 
-                    onClick={() => onSetDeadline(task)}
-                    className="p-0.5 hover:text-slate-900 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-100 hover:bg-slate-200 rounded text-[8px] px-1 font-bold"
-                    title="Set deadline"
-                  >
-                    {task.section === 'projects' || task.section === 'other' ? 'DUE' : 'TIME'}
-                  </button>
-                  <button 
-                    onClick={() => onDelete(task.id)}
-                    className="p-0.5 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 size={compact ? 10 : 12} />
-                  </button>
-                  <button 
                     onClick={(e) => { e.stopPropagation(); toggleExpand(task.id); }}
-                    className={`p-0.5 hover:text-slate-900 transition-colors bg-slate-100 hover:bg-slate-200 rounded ${task.subtasks?.length ? 'text-slate-900' : 'text-slate-400'}`}
+                    className={`h-5 w-5 flex items-center justify-center hover:text-slate-900 transition-colors bg-slate-100 hover:bg-slate-200 rounded ${task.subtasks?.length ? 'text-slate-900' : 'text-slate-400'}`}
                     title={expandedTaskIds.has(task.id) ? "Collapse checklist" : "Expand checklist"}
                   >
-                    {expandedTaskIds.has(task.id) ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    {expandedTaskIds.has(task.id) ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
                   </button>
                 </div>
               </div>
