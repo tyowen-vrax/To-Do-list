@@ -12,7 +12,7 @@ service cloud.firestore {
     }
 
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return isSignedIn() && request.auth.uid == userId && request.auth.token.email_verified == true;
     }
 
     function isValidId(id) {
@@ -22,16 +22,19 @@ service cloud.firestore {
     // User Settings
     match /users/{userId} {
       allow get: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUserSettings(request.resource.data);
-      allow update: if isOwner(userId) && isValidUserSettings(request.resource.data);
+      allow create: if isOwner(userId) 
+        && isValidUserSettings(request.resource.data)
+        && request.resource.data.keys().size() <= 5;
+      allow update: if isOwner(userId) 
+        && isValidUserSettings(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'goals', 'lastDailyReset', 'lastMonthlyReset', 'notes']);
 
       function isValidUserSettings(data) {
-        return data.keys().hasAll(['title', 'goals', 'lastDailyReset', 'lastMonthlyReset'])
-          && data.keys().size() == 4
-          && data.title is string && data.title.size() <= 100
-          && data.goals is list && data.goals.size() <= 10
-          && data.lastDailyReset is string && data.lastDailyReset.matches('^\\d{4}-\\d{2}-\\d{2}$')
-          && data.lastMonthlyReset is string && data.lastMonthlyReset.matches('^\\d{4}-\\d{2}-\\d{2}$');
+        return (!('title' in data) || data.title is string && data.title.size() <= 100)
+          && (!('goals' in data) || data.goals is list && data.goals.size() <= 10)
+          && (!('lastDailyReset' in data) || data.lastDailyReset is string && data.lastDailyReset.matches('^\\d{4}-\\d{2}-\\d{2}$'))
+          && (!('lastMonthlyReset' in data) || data.lastMonthlyReset is string && data.lastMonthlyReset.matches('^\\d{4}-\\d{2}-\\d{2}$'))
+          && (!('notes' in data) || data.notes is string && data.notes.size() <= 100000);
       }
 
       // Subcollections
@@ -47,7 +50,15 @@ service cloud.firestore {
             && data.text is string && data.text.size() <= 500
             && data.completed is bool
             && data.section in ['daily', 'monthly', 'projects', 'other']
-            && data.order is number;
+            && data.order is number
+            && (!('deadline' in data) || data.deadline is string || data.deadline == null)
+            && (!('priority' in data) || data.priority in ['High', 'Med', 'Low', 'None'])
+            && (!('repeatMonthly' in data) || data.repeatMonthly is bool)
+            && (!('monthlyRepeatType' in data) || data.monthlyRepeatType in ['day', 'nthWeekday'] || data.monthlyRepeatType == null)
+            && (!('monthlyRepeatNth' in data) || data.monthlyRepeatNth is int || data.monthlyRepeatNth == 'last' || data.monthlyRepeatNth == null)
+            && (!('monthlyRepeatWeekday' in data) || data.monthlyRepeatWeekday is int || data.monthlyRepeatWeekday == null)
+            && (!('completedAt' in data) || data.completedAt is string || data.completedAt == null)
+            && (!('subtasks' in data) || data.subtasks is list);
         }
       }
 
@@ -62,7 +73,10 @@ service cloud.firestore {
             && data.id is string
             && data.text is string && data.text.size() <= 200
             && data.dayOfWeek is int && data.dayOfWeek >= 0 && data.dayOfWeek <= 6
-            && data.repeatWeekly is bool;
+            && data.repeatWeekly is bool
+            && (!('date' in data) || data.date is string || data.date == null)
+            && (!('endDate' in data) || data.endDate is string || data.endDate == null)
+            && (!('time' in data) || data.time is string || data.time == null);
         }
       }
 
@@ -75,9 +89,11 @@ service cloud.firestore {
         function isValidHistoryItem(data) {
           return data.keys().hasAll(['id', 'text', 'completedAt', 'section'])
             && data.id is string
-            && data.text is string && data.text.size() <= 500
+            && data.text is string && data.text.size() <= 600
             && data.completedAt is string
-            && data.section is string;
+            && data.section is string
+            && (!('priority' in data) || data.priority in ['High', 'Med', 'Low', 'None'])
+            && (!('savedForYearlyReview' in data) || data.savedForYearlyReview is bool);
         }
       }
 

@@ -24,14 +24,7 @@ import {
   getDocFromServer,
   deleteField
 } from 'firebase/firestore';
-const firebaseConfig = {
-  apiKey: "AIzaSyBYaDbK8euiu1dJU1qZOAD8LiiO5ZF3his",
-  authDomain: "gen-lang-client-0436054198.firebaseapp.com",
-  projectId: "gen-lang-client-0436054198",
-  storageBucket: "gen-lang-client-0436054198.firebasestorage.app",
-  messagingSenderId: "925810231081",
-  appId: "1:925810231081:web:812973d0fe26d19478d938"
-};
+import firebaseConfig from '../firebase-applet-config.json';
 
 // ... existing imports ...
 import { 
@@ -212,7 +205,7 @@ const INITIAL_STATE: DashboardState = {
 // --- Firebase Initialization ---
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app, "ai-studio-375da860-fb89-4b2f-945b-bc123c69517c");
+const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 

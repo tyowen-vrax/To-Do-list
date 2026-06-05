@@ -8,7 +8,8 @@
         "title": { "type": "string" },
         "goals": { "type": "array", "items": { "type": "string" } },
         "lastDailyReset": { "type": "string" },
-        "lastMonthlyReset": { "type": "string" }
+        "lastMonthlyReset": { "type": "string" },
+        "notes": { "type": "string" }
       },
       "required": ["title", "goals", "lastDailyReset", "lastMonthlyReset"]
     },
@@ -22,11 +23,27 @@
         "completed": { "type": "boolean" },
         "priority": { "type": "string", "enum": ["High", "Med", "Low", "None"] },
         "deadline": { "type": "string" },
+        "repeatMonthly": { "type": "boolean" },
+        "monthlyRepeatType": { "type": "string", "enum": ["day", "nthWeekday"] },
+        "monthlyRepeatNth": { "type": "number" },
+        "monthlyRepeatWeekday": { "type": "number" },
         "completedAt": { "type": "string" },
         "section": { "type": "string", "enum": ["daily", "monthly", "projects", "other"] },
-        "order": { "type": "number" }
+        "order": { "type": "number" },
+        "subtasks": { "type": "array", "items": { "$ref": "#/entities/SubTask" } }
       },
       "required": ["id", "text", "completed", "section", "order"]
+    },
+    "SubTask": {
+      "title": "SubTask",
+      "description": "A sub-task item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string" },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["id", "text", "completed"]
     },
     "CalendarEvent": {
       "title": "CalendarEvent",
